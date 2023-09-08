@@ -9,14 +9,34 @@ laPopulation = {}
 lesBoutons = { "A", "B", "X", "Y", "Up", "Down", "Left", "Right", }
 -- size: #(lesBoutons)
 
-function newReseau()
-    return {}
+function mutateIndividu(individu)
+    return individu
 end
 
-function newPopulation()
+-- Crée la nouvelle basée sur la mutation du #1 avec les N suivants
+function nextGeneration(previousGeneration, scoreByIndividu)
+    table.sort(scoreByIndividu, function(a, b)
+        return a.score < b.score
+    end)
+    betterIndividu = scoreByIndividu[1].individu
+
+    for i = 0, NB_INDIVIDU_POPULATION do
+        individu = betterIndividu
+        individu = mutateIndividu(individu)
+        table.insert(population, individu)
+    end
+end
+
+function newIndividuReseau()
+    return { foo = "bar" }
+end
+
+function generationInitiale()
     population = {}
     for i = 0, NB_INDIVIDU_POPULATION do
-        table.insert(population, newReseau())
+        individu = newIndividuReseau()
+        individu = mutateIndividu(individu)
+        table.insert(population, individu)
     end
     return population
 end
@@ -39,11 +59,12 @@ function startLevel()
 end
 
 function niveauFini()
-    return memory.readbyte(0x0100) == 12
+    return true
+    --return memory.readbyte(0x0100) == 12
 end
 
 function getScore()
-    return math.random(0, 100)
+    return math.random(0, 20)
 end
 
 function play()
@@ -57,13 +78,18 @@ end
 
 console.clear()
 console.log("Starting...")
-for generation = 1, 5 do
+
+population = generationInitiale()
+for generation = 1, 1 do
     console.log("Génération " .. generation)
-    population = newPopulation()
+    scoreByIndividu = {}
     for i, individu in ipairs(population) do
         console.log("\tIndividu " .. i)
         startLevel()
         score = play()
+        table.insert(scoreByIndividu, { individu = individu, score = score })
         console.log("\t\tScore " .. score)
     end
+
+    population = nextGeneration(population, scoreByIndividu)
 end
