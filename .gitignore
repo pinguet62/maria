@@ -1,0 +1,6 @@
+# emulator
+/BizHawk-*-win-x64
+# ROMs
+*.sfc
+# states
+*.State
