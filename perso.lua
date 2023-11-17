@@ -1,15 +1,22 @@
+-- TODO field "weight" not necessary in linksByLevel
+
+json = require "json"
+
 console.clear()
 gui.clearGraphics()
 
--- Program parameters
-DEBUG = true
+-- Program
 NOM_SAVESTATE = "C:/Users/10131571/Documents/maria/Super Mario World (Europe) (Rev 1).Snes9x.QuickSave1.State"
-NB_GENERATIONS = 1
-NB_INDIVIDU_POPULATION = 1
+NB_GENERATIONS = 100
 
--- Réseau parameters
+-- Réseau
 NB_COUCHE_CACHEES = 1
 TAILLE_COUCHE_CACHEE = 5
+-- Génétique
+NB_INDIVIDU_POPULATION = 5
+TOP_CLASSEMENT = 0.5 -- keep only part of the ranking
+MUTATION_PROBA = 0.5
+MUTATION_RATE = 0.25 -- ±%
 
 -- game configuration
 NB_INPUTS = (256 / 16) * (256 / 16)
@@ -24,6 +31,8 @@ BUTTONS = {
     --"Right",
 }
 
+ENEMY_NEURONNE_VALUE = 1
+
 function drawReseau(reseau)
     local gridWidthOrHeight = math.sqrt(NB_INPUTS)
     local gridCellSize = 6
@@ -32,7 +41,7 @@ function drawReseau(reseau)
     for i = 0, NB_INPUTS - 1 do
         local x = distanceFromEdge + (i % gridWidthOrHeight) * gridCellSize
         local y = distanceFromEdge + math.floor(i / gridWidthOrHeight) * gridCellSize
-        local color = reseau.neuronsByLevel[1][i + 1].value == -1 and "red" or "white"
+        local color = reseau.neuronsByLevel[1][i + 1].value == ENEMY_NEURONNE_VALUE and "red" or "white"
         gui.drawRectangle(x, y, gridCellSize, gridCellSize, "black", color)
     end
 
@@ -91,23 +100,29 @@ end
 -- Crée la nouvelle basée sur la mutation du #1 avec les N suivants
 function nextGeneration(previousGeneration, scoreByIndividu)
     table.sort(scoreByIndividu, function(a, b)
-        return a.score < b.score
+        return a.score > b.score
     end)
     local betterIndividu = scoreByIndividu[1].individu
+    --console.log("Better: " .. json.encode(betterIndividu))
 
-    for i = 0, #previousGeneration do
-        local individu = betterIndividu
-        -- TODO évolution: reproduction entre meilleur et N suivants
-        mutateIndividu(individu)
-        table.insert(population, individu)
+    if #previousGeneration > 1 and scoreByIndividu[1].score ~= scoreByIndividu[2].score then
+        console.log("New generation with a #1 !!!")
     end
 
-    return previousGeneration
+    local nextGeneration = {}
+    for i = 1, #previousGeneration do
+        local otherIndex = 1 + math.floor(math.random() * TOP_CLASSEMENT * #previousGeneration)
+        local goodIndividu = previousGeneration[otherIndex]
+        local childIndividu = reproduireIndividus(goodIndividu, betterIndividu)
+        childIndividu = mutateIndividu(childIndividu)
+        table.insert(nextGeneration, childIndividu)
+    end
+    return nextGeneration
 end
 
 function firstRandomIndividu(nbInputs, nbOutputs)
     local neuronsByLevel = {}
-    local initialValue = 0.5
+    local initialValue = 0
     -- first = input
     local inputs = {}
     table.insert(neuronsByLevel, inputs)
@@ -132,14 +147,14 @@ function firstRandomIndividu(nbInputs, nbOutputs)
     local linksByLevel = {} -- from level > source neuron index > target neuron index
     for c = 1, #neuronsByLevel - 1 do
         local fromNeuron = {}
-        table.insert(linksByLevel, fromNeuron)
         for from = 1, #neuronsByLevel[c] do
             local toNeuron = {}
-            table.insert(fromNeuron, toNeuron)
             for to = 1, #neuronsByLevel[c + 1] do
-                table.insert(toNeuron, { weight = 0.5 })
+                table.insert(toNeuron, { weight = 0 })
             end
+            table.insert(fromNeuron, toNeuron)
         end
+        table.insert(linksByLevel, fromNeuron)
     end
 
     return {
@@ -148,50 +163,104 @@ function firstRandomIndividu(nbInputs, nbOutputs)
     }
 end
 
-function mutateIndividu(individu)
-    for c, level in ipairs(individu.linksByLevel) do
+function mutateWeight(weight)
+    if math.random() < MUTATION_PROBA then
+        local rate = MUTATION_RATE * (math.random() - 0.5)
+        weight = weight + rate
+        if weight < 0 then
+            weight = 0
+        end
+        if weight > 1 then
+            weight = 1
+        end
+    end
+    return weight
+end
+
+function mutateIndividu(reseau)
+    for c, level in ipairs(reseau.linksByLevel) do
         for f, from in ipairs(level) do
             for l, link in ipairs(from) do
-                local delta = (math.random() - 0.5) * 1.05 -- ±5%
-                link.weight = link.weight * delta
+                link.weight = mutateWeight(link.weight)
             end
         end
     end
+    return reseau
+end
+
+function reproduireIndividus(reseau1, reseau2)
+    local neuronsByLevel = {}
+    for c = 1, #reseau1.neuronsByLevel do
+        local level = {}
+        for n = 1, #reseau1.neuronsByLevel[c] do
+            table.insert(level, { value = 0 }) -- computed during propagation
+        end
+        table.insert(neuronsByLevel, level)
+    end
+
+    local linksByLevel = {}
+    for c = 1, #reseau1.linksByLevel do
+        local fromNeuron = {}
+        for from = 1, #reseau1.linksByLevel[c] do
+            local toNeuron = {}
+            for to = 1, #reseau1.linksByLevel[c][from] do
+                local weight = (reseau1.linksByLevel[c][from][to].weight + reseau2.linksByLevel[c][from][to].weight) / 2
+                table.insert(toNeuron, { weight = weight })
+            end
+            table.insert(fromNeuron, toNeuron)
+        end
+        table.insert(linksByLevel, fromNeuron)
+    end
+
+    return {
+        neuronsByLevel = neuronsByLevel,
+        linksByLevel = linksByLevel,
+    }
 end
 
 -- TODO
 function outputActivated(value)
-    return value / (1 + math.abs(value)) >= 0.5
+    return value >= 0.5
+end
+
+function sigmoid(value)
+    return value / (1 + math.exp(-1 * value))
 end
 
 -- TODO
 function updateInputsRecomputeOutputs(reseau, inputs)
     -- 1st level: inputs
     for i, input in ipairs(inputs) do
+        -- TODO remove debug
+        if reseau == nill or reseau.neuronsByLevel == nill or reseau.neuronsByLevel[1] == nill or reseau.neuronsByLevel[1][i] == nill then
+            console.log("reseau: " .. json.encode(reseau))
+        end
         reseau.neuronsByLevel[1][i].value = input
     end
 
-    -- TODO compute
     -- intermediates
     for c = 2, #reseau.neuronsByLevel do
         for n, neuron in ipairs(reseau.neuronsByLevel[c]) do
-            local newValue = 0
+            local weightedSum = 0.0
             for p, previous in ipairs(reseau.neuronsByLevel[c - 1]) do
                 local link = reseau.linksByLevel[c - 1][p][n]
-                newValue = newValue + link.weight * previous.value
+                weightedSum = weightedSum + link.weight * previous.value
             end
-            reseau.neuronsByLevel[c][n].value = newValue
+            reseau.neuronsByLevel[c][n].value = sigmoid(weightedSum)
         end
     end
 
     local outputs = {}
     for o, neuron in ipairs(reseau.neuronsByLevel[#reseau.neuronsByLevel]) do
         table.insert(outputs, outputActivated(neuron.value))
+        --if outputActivated(neuron.value) then
+        --    console.log("Activated! " .. json.encode(reseau))
+        --end
     end
     return outputs
 end
 
-function computeOutputAndUpdateButtons(individu)
+function computeOutputsThenUpdateButtons(individu)
     local inputs = {}
     for i = 1, NB_INPUTS do
         table.insert(inputs, 0)
@@ -201,7 +270,7 @@ function computeOutputAndUpdateButtons(individu)
         local iX = math.floor((sprite.x / width)) + 1
         local iY = math.floor((sprite.y / width)) + 1
         local i = iX + iY * width
-        inputs[i] = -1
+        inputs[i] = ENEMY_NEURONNE_VALUE
     end
 
     local outputs = updateInputsRecomputeOutputs(individu, inputs)
@@ -220,24 +289,26 @@ function niveauFini()
 end
 
 function getScore()
-    return memory.readbyte(0x13d6)
+    return memory.readbyte(0x0f34)
 end
 
 function play(individu)
     savestate.load(NOM_SAVESTATE)
     while true do
-        computeOutputAndUpdateButtons(individu)
+        computeOutputsThenUpdateButtons(individu)
         drawReseau(individu)
         if niveauFini() then
-            return getScore()
+            return getScore() -- TODO append time
         end
     end
 end
 
 local population = firstRandomGeneration()
 for generation = 1, NB_GENERATIONS do
+    console.log("Génération " .. generation .. "/" .. NB_GENERATIONS)
     local scoreByIndividu = {}
-    for _, individu in ipairs(population) do
+    for i, individu in ipairs(population) do
+        console.log("> Individu " .. i .. "/" .. #population)
         local score = play(individu)
         table.insert(scoreByIndividu, { individu = individu, score = score })
     end
