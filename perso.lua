@@ -3,7 +3,7 @@ json = require "json"
 console.clear()
 gui.clearGraphics()
 
-NOM_SAVESTATE = "C:/Users/10131571/Documents/maria/Super Mario World (Europe) (Rev 1).Snes9x.QuickSave1.State"
+NOM_SAVESTATE = "C:/Users/10131571/Documents/maria/Super Mario World (Europe) (Rev 1).Snes9x.QuickSave0.State"
 INPUTS_X_MAX = 16 -- x
 INPUTS_Y_MAX = 16 -- y
 BUTTONS = {
@@ -27,7 +27,7 @@ TAILLE_COUCHE_CACHEE = 5
 
 -- Algorithmes génétiques
 NB_INDIVIDU_POPULATION = 10
-NB_GENERATIONS = 500
+NB_GENERATIONS = 5000
 TOP_CLASSEMENT = 0.5 -- keep only part of the ranking
 MUTATION_PROBA = 0.25
 MUTATION_RATE = 0.2 -- ±%
