@@ -63,7 +63,7 @@ function drawReseau(reseau)
                 inputCellSize.x,
                 inputCellSize.y,
                 "black",
-                inputNeuron.value == ENEMY_NEURONNE_VALUE and "red" or "white")
+                inputNeuron == ENEMY_NEURONNE_VALUE and "red" or "white")
     end
     local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize.x + inputCellSize.x
 
@@ -81,7 +81,7 @@ function drawReseau(reseau)
                 outputCellSize.x,
                 outputCellSize.y,
                 "white",
-                outputActivated(outputNeuron.value) and "red" or "black")
+                outputActivated(outputNeuron) and "red" or "black")
     end
 end
 
