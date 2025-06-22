@@ -4,8 +4,6 @@ console.clear()
 gui.clearGraphics()
 
 NOM_SAVESTATE = "C:/Users/10131571/Documents/maria/Super Mario World (Europe) (Rev 1).Snes9x.QuickSave0.State"
-INPUTS_X_MAX = 16 -- x
-INPUTS_Y_MAX = 16 -- y
 BUTTONS = {
     --"A", -- saute en tournant
     "B", -- saute
@@ -22,7 +20,7 @@ RESTORE = nil -- json.decode('')
 DRAW = false
 
 -- Réseau de neurones
-NB_COUCHE_CACHEES = 1
+NB_COUCHE_CACHEES = 2
 TAILLE_COUCHE_CACHEE = 5
 
 -- Algorithmes génétiques
@@ -32,13 +30,21 @@ TOP_CLASSEMENT = 0.5 -- keep only part of the ranking
 MUTATION_PROBA = 0.25
 MUTATION_RATE = 0.2 -- ±%
 
--- Constantes de facilitation
+-- Paramètres spécifiques au jeu
 GAME_WEIGHT = 256 -- x
 GAME_HEIGHT = 256 -- y
-INPUTS_WEIGHT = GAME_WEIGHT / INPUTS_X_MAX
-INPUTS_HEIGHT = GAME_HEIGHT / INPUTS_Y_MAX
-NB_INPUTS = (GAME_WEIGHT / INPUTS_WEIGHT) * (GAME_HEIGHT / INPUTS_HEIGHT)
+TAILLE_TILE = 16
+NB_SPRITES = 12 -- limit in this game
+
+-- Constantes de facilitation
+INPUTS_X_MAX = GAME_WEIGHT / TAILLE_TILE -- x
+INPUTS_Y_MAX = GAME_HEIGHT / TAILLE_TILE -- y
+NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
 ENEMY_NEURONNE_VALUE = 1
+
+--- @alias Position { x: number, y: number }
+--- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
+--- @alias Generation Reseau[]
 
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
@@ -51,6 +57,7 @@ function gridPositionFromNeuronIndex(neuronIndex)
     }
 end
 
+--- @param reseau Reseau
 function drawReseau(reseau)
     -- input
     local inputDrawOffset = { x = 0, y = 0 }
@@ -85,12 +92,13 @@ function drawReseau(reseau)
     end
 end
 
+--- @return Position[]
 function getSprites()
     local cameraX = memory.read_s16_le(0x1462)
     local cameraY = memory.read_s16_le(0x1464)
 
     local sprites = {}
-    for i = 0, 12 - 1 do
+    for i = 0, NB_SPRITES - 1 do
         local stat = memory.readbyte(0x14c8 + i)
         if stat ~= 0 then
             local spriteX = memory.readbyte(0x14e0 + i) * GAME_WEIGHT + memory.readbyte(0x00e4 + i)
@@ -100,7 +108,8 @@ function getSprites()
             local cameraSpriteY = spriteY - cameraY
 
             -- visible by player?
-            if 0 < cameraSpriteX and cameraSpriteX < GAME_WEIGHT and 0 < cameraSpriteY and cameraSpriteY < GAME_HEIGHT then
+            if 0 < cameraSpriteX and cameraSpriteX < GAME_WEIGHT
+                    and 0 < cameraSpriteY and cameraSpriteY < GAME_HEIGHT then
                 local sprite = { x = cameraSpriteX, y = cameraSpriteY }
                 table.insert(sprites, sprite)
             end
@@ -109,6 +118,7 @@ function getSprites()
     return sprites
 end
 
+--- @return Generation
 function firstRandomGeneration()
     local population = {}
     for i = 1, NB_INDIVIDU_POPULATION do
@@ -120,6 +130,8 @@ function firstRandomGeneration()
 end
 
 -- Crée la nouvelle basée sur la mutation du #1 avec les N suivants
+--- @param previousGeneration Generation
+--- @return Generation
 function nextGeneration(previousGeneration, scoreByIndividu)
     table.sort(scoreByIndividu, function(a, b)
         return a.score > b.score
@@ -150,33 +162,37 @@ function nextGeneration(previousGeneration, scoreByIndividu)
     return nextGeneration
 end
 
+--- @param nbInputs number
+--- @param nbOutputs number
+--- @return Reseau
 function firstRandomIndividu(nbInputs, nbOutputs)
     if RESTORE ~= nill then
         return RESTORE
     end
 
-    local neuronsByLevel = {}
     local initialValue = 0
+
+    local neuronsByLevel = {}
     -- first = input
     local inputs = {}
-    table.insert(neuronsByLevel, inputs)
     for x = 1, nbInputs do
         table.insert(inputs, initialValue)
     end
+    table.insert(neuronsByLevel, inputs)
     -- intermediates
     for x = 1, NB_COUCHE_CACHEES do
         local level = {}
-        table.insert(neuronsByLevel, level)
         for x = 1, TAILLE_COUCHE_CACHEE do
-            table.insert(level, { value = initialValue })
+            table.insert(level, initialValue)
         end
+        table.insert(neuronsByLevel, level)
     end
     -- last = outputs
     local outputs = {}
-    table.insert(neuronsByLevel, outputs)
     for x = 1, nbOutputs do
         table.insert(outputs, initialValue)
     end
+    table.insert(neuronsByLevel, outputs)
 
     local weightsByLevel = {} -- from level > source neuron index > target neuron index
     for c = 1, #neuronsByLevel - 1 do
@@ -191,12 +207,18 @@ function firstRandomIndividu(nbInputs, nbOutputs)
         table.insert(weightsByLevel, fromNeuron)
     end
 
+    print(json.encode({
+        neuronsByLevel = neuronsByLevel,
+        weightsByLevel = weightsByLevel,
+    }))
     return {
         neuronsByLevel = neuronsByLevel,
         weightsByLevel = weightsByLevel,
     }
 end
 
+--- @param weight number
+--- @return number
 function mutateWeight(weight)
     if math.random() < MUTATION_PROBA then
         local rate = MUTATION_RATE * (math.random() - 0.5)
@@ -211,6 +233,8 @@ function mutateWeight(weight)
     return weight
 end
 
+--- @param reseau Reseau
+--- @return Reseau
 function mutateIndividu(reseau)
     for c, level in ipairs(reseau.weightsByLevel) do
         for f, from in ipairs(level) do
@@ -222,6 +246,9 @@ function mutateIndividu(reseau)
     return reseau
 end
 
+--- @param reseau1 Reseau
+--- @param reseau2 Reseau
+--- @return Reseau
 function reproduireIndividus(reseau1, reseau2)
     local neuronsByLevel = {}
     for c = 1, #reseau1.neuronsByLevel do
@@ -252,15 +279,22 @@ function reproduireIndividus(reseau1, reseau2)
     }
 end
 
+--- @param value number
+--- @return boolean
 function outputActivated(value)
     return value >= 0.5
 end
 
+--- @param value number
+--- @return number
 function sigmoid(value)
     return value / (1 + math.exp(-1 * value))
 end
 
-function updateInputsRecomputeOutputs(reseau, inputs)
+--- @param reseau Reseau
+--- @param inputs TODO
+--- @return TODO
+function updateInputsRecomputeLinkToOutputs(reseau, inputs)
     -- 1st level: inputs
     for i, input in ipairs(inputs) do
         reseau.neuronsByLevel[1][i] = input
@@ -285,6 +319,7 @@ function updateInputsRecomputeOutputs(reseau, inputs)
     return outputs
 end
 
+--- @param individu Reseau
 function computeOutputsThenUpdateButtons(individu)
     local inputs = {}
     for i = 1, NB_INPUTS do
@@ -299,7 +334,7 @@ function computeOutputsThenUpdateButtons(individu)
         inputs[i + 1] = ENEMY_NEURONNE_VALUE
     end
 
-    local outputs = updateInputsRecomputeOutputs(individu, inputs)
+    local outputs = updateInputsRecomputeLinkToOutputs(individu, inputs)
 
     local newButtons = {}
     for o, enabled in ipairs(outputs) do
@@ -310,14 +345,17 @@ function computeOutputsThenUpdateButtons(individu)
     emu.frameadvance()
 end
 
+--- @return boolean
 function niveauFini()
     return memory.readbyte(0x0100) == 12
 end
 
+--- @return number
 function getScore()
     return memory.read_u24_le(0x0f34)
 end
 
+--- @param individu Reseau
 function play(individu)
     savestate.load(NOM_SAVESTATE)
     while true do
