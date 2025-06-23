@@ -31,8 +31,8 @@ MUTATION_PROBA = 0.25
 MUTATION_RATE = 0.2 -- ±%
 
 -- Paramètres spécifiques au jeu
-GAME_WEIGHT = 256 -- x
-GAME_HEIGHT = 256 -- y
+GAME_WEIGHT = 256 -- x (horizontal / to right)
+GAME_HEIGHT = 224 -- y (vertical /to bottom)
 TAILLE_TILE = 16
 NB_SPRITES = 12 -- limit in this game
 
@@ -42,10 +42,11 @@ INPUTS_Y_MAX = GAME_HEIGHT / TAILLE_TILE -- y
 NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
 ENEMY_NEURONNE_VALUE = 1
 
---- @alias Position { x: number, y: number }
+--- @alias Position { x: number, y: number } Start at "1"
 --- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
 --- @alias Generation Reseau[]
 
+--- @param position Position
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
 end
@@ -70,7 +71,7 @@ function drawReseau(reseau)
                 inputCellSize.x,
                 inputCellSize.y,
                 "black",
-                inputNeuron == ENEMY_NEURONNE_VALUE and "red" or "white")
+                inputNeuron == ENEMY_NEURONNE_VALUE and "red" or nil)
     end
     local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize.x + inputCellSize.x
 
@@ -112,6 +113,26 @@ function getSprites()
                     and 0 < cameraSpriteY and cameraSpriteY < GAME_HEIGHT then
                 local sprite = { x = cameraSpriteX, y = cameraSpriteY }
                 table.insert(sprites, sprite)
+            end
+        end
+    end
+    return sprites
+end
+
+--- @return Position[]
+function getTiles()
+    local cameraX = memory.read_s16_le(0x1462)
+    local cameraY = memory.read_s16_le(0x1464)
+    local sprites = {}
+    for i = 1, GAME_WEIGHT / TAILLE_TILE, 1 do
+        local xT = math.floor((cameraX + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
+        for j = 1, GAME_HEIGHT / TAILLE_TILE, 1 do
+            local yT = math.floor((cameraY + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
+            if xT > 0 and yT > 0 then
+                local tile = memory.readbyte(0x1C800 + math.floor(xT / TAILLE_TILE) * 0x1B0 + yT * TAILLE_TILE + xT % TAILLE_TILE)
+                if tile == 1 then
+                    table.insert(sprites, { x = i, y = j })
+                end
             end
         end
     end
