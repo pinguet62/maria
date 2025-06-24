@@ -15,6 +15,11 @@ BUTTONS = {
     --"Right",
 }
 
+-- Functions (uncomment target program)
+PROGRAM = "IA"
+--PROGRAM = "DEBUG SPRITES"
+--PROGRAM = "DEBUG TILES"
+
 -- Debug & Test
 RESTORE = nil -- json.decode('')
 DRAW = false
@@ -37,12 +42,12 @@ TAILLE_TILE = 16
 NB_SPRITES = 12 -- limit in this game
 
 -- Constantes de facilitation
-INPUTS_X_MAX = GAME_WEIGHT / TAILLE_TILE -- x
-INPUTS_Y_MAX = GAME_HEIGHT / TAILLE_TILE -- y
+INPUTS_X_MAX = 256--[[GAME_WEIGHT]] / TAILLE_TILE -- x
+INPUTS_Y_MAX = 256--[[GAME_HEIGHT]] / TAILLE_TILE -- y
 NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
 ENEMY_NEURONNE_VALUE = 1
 
---- @alias Position { x: number, y: number } Start at "1"
+--- @alias Position { x: number, y: number } In custom grid (not in pixel graphic). Start at "1"
 --- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
 --- @alias Generation Reseau[]
 
@@ -93,6 +98,8 @@ function drawReseau(reseau)
     end
 end
 
+--- In "pixel graphic"
+--- TODO [sprites] convert to "grid"
 --- @return Position[]
 function getSprites()
     local cameraX = memory.read_s16_le(0x1462)
@@ -100,10 +107,10 @@ function getSprites()
 
     local sprites = {}
     for i = 0, NB_SPRITES - 1 do
-        local stat = memory.readbyte(0x14c8 + i)
-        if stat ~= 0 then
-            local spriteX = memory.readbyte(0x14e0 + i) * GAME_WEIGHT + memory.readbyte(0x00e4 + i)
-            local spriteY = memory.readbyte(0x14d4 + i) * GAME_HEIGHT + memory.readbyte(0x00d8 + i)
+        local status = memory.readbyte(0x14c8 + i)
+        if status ~= 0 then
+            local spriteX = memory.readbyte(0xe4 + i) + memory.readbyte(0x14e0 + i) * 256
+            local spriteY = memory.readbyte(0xd8 + i) + memory.readbyte(0x14d4 + i) * 256
 
             local cameraSpriteX = spriteX - cameraX
             local cameraSpriteY = spriteY - cameraY
@@ -111,14 +118,40 @@ function getSprites()
             -- visible by player?
             if 0 < cameraSpriteX and cameraSpriteX < GAME_WEIGHT
                     and 0 < cameraSpriteY and cameraSpriteY < GAME_HEIGHT then
-                local sprite = { x = cameraSpriteX, y = cameraSpriteY }
-                table.insert(sprites, sprite)
+                table.insert(sprites, { x = cameraSpriteX, y = cameraSpriteY })
             end
         end
     end
     return sprites
 end
+function runDebugSprites()
+    savestate.load(NOM_SAVESTATE)
+    local interval = 10
+    local rep = 0
+    while true do
+        rep = rep + 1
+        if rep % interval == 0 then
+            console.clear()
+            gui.clearGraphics()
+            for i = 0, 15 do
+                for j = 0, 15 do
+                    gui.drawRectangle(i * 16, j * 16, 16, 16, "black")
+                end
+            end
 
+            for _, sprite in ipairs(getSprites()) do
+                -- TODO [sprites] move conversion to getSprites()
+                local iX = math.floor(TAILLE_TILE * (sprite.x / 256)) + 1
+                local iY = math.floor(TAILLE_TILE * (sprite.y / 256)) + 1
+
+                gui.drawRectangle((iX - 1) * TAILLE_TILE, (iY - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
+            end
+        end
+        emu.frameadvance()
+    end
+end
+
+--- Relative to Camera
 --- @return Position[]
 function getTiles()
     local cameraX = memory.read_s16_le(0x1462)
@@ -137,6 +170,23 @@ function getTiles()
         end
     end
     return sprites
+end
+function runDebugTiles()
+    savestate.load(NOM_SAVESTATE)
+    local interval = 10
+    local rep = 0
+    while true do
+        rep = rep + 1
+        if rep % interval == 0 then
+            console.clear()
+            gui.clearGraphics()
+            for _, tile in ipairs(getTiles()) do
+                console.log(tile.x .. "/" .. tile.y)
+                gui.drawRectangle((tile.x - 1) * TAILLE_TILE, (tile.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
+            end
+        end
+        emu.frameadvance()
+    end
 end
 
 --- @return Generation
@@ -390,15 +440,25 @@ function play(individu)
     end
 end
 
-local population = firstRandomGeneration()
-for generation = 1, NB_GENERATIONS do
-    console.log("Génération " .. generation .. "/" .. NB_GENERATIONS)
-    local scoreByIndividu = {}
-    for i, individu in ipairs(population) do
-        console.log("> Individu " .. i .. "/" .. #population)
-        local score = play(individu)
-        table.insert(scoreByIndividu, { individu = individu, score = score })
-    end
+function runIA()
+    local population = firstRandomGeneration()
+    for generation = 1, NB_GENERATIONS do
+        console.log("Génération " .. generation .. "/" .. NB_GENERATIONS)
+        local scoreByIndividu = {}
+        for i, individu in ipairs(population) do
+            console.log("> Individu " .. i .. "/" .. #population)
+            local score = play(individu)
+            table.insert(scoreByIndividu, { individu = individu, score = score })
+        end
 
-    population = nextGeneration(population, scoreByIndividu)
+        population = nextGeneration(population, scoreByIndividu)
+    end
+end
+
+if PROGRAM == "IA" then
+    runIA()
+elseif PROGRAM == "DEBUG SPRITES" then
+    runDebugSprites()
+elseif PROGRAM == "DEBUG TILES" then
+    runDebugTiles()
 end
