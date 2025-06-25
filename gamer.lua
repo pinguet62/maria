@@ -98,8 +98,6 @@ function drawReseau(reseau)
     end
 end
 
---- In "pixel graphic"
---- TODO [sprites] convert to "grid"
 --- @return Position[]
 function getSprites()
     local cameraX = memory.read_s16_le(0x1462)
@@ -112,13 +110,15 @@ function getSprites()
             local spriteX = memory.readbyte(0xe4 + i) + memory.readbyte(0x14e0 + i) * 256
             local spriteY = memory.readbyte(0xd8 + i) + memory.readbyte(0x14d4 + i) * 256
 
-            local cameraSpriteX = spriteX - cameraX
-            local cameraSpriteY = spriteY - cameraY
+            local screenX = spriteX - cameraX
+            local screenY = spriteY - cameraY
 
             -- visible by player?
-            if 0 < cameraSpriteX and cameraSpriteX < GAME_WEIGHT
-                    and 0 < cameraSpriteY and cameraSpriteY < GAME_HEIGHT then
-                table.insert(sprites, { x = cameraSpriteX, y = cameraSpriteY })
+            if 0 < screenX and screenX < GAME_WEIGHT
+                    and 0 < screenY and screenY < GAME_HEIGHT then
+                local gridX = math.floor(TAILLE_TILE * (screenX / 256)) + 1
+                local gridY = math.floor(TAILLE_TILE * (screenY / 256)) + 1
+                table.insert(sprites, { x = gridX, y = gridY })
             end
         end
     end
@@ -140,18 +140,13 @@ function runDebugSprites()
             end
 
             for _, sprite in ipairs(getSprites()) do
-                -- TODO [sprites] move conversion to getSprites()
-                local iX = math.floor(TAILLE_TILE * (sprite.x / 256)) + 1
-                local iY = math.floor(TAILLE_TILE * (sprite.y / 256)) + 1
-
-                gui.drawRectangle((iX - 1) * TAILLE_TILE, (iY - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
+                gui.drawRectangle((sprite.x - 1) * TAILLE_TILE, (sprite.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
             end
         end
         emu.frameadvance()
     end
 end
 
---- Relative to Camera
 --- @return Position[]
 function getTiles()
     local cameraX = memory.read_s16_le(0x1462)
@@ -397,10 +392,7 @@ function computeOutputsThenUpdateButtons(individu)
         table.insert(inputs, 0)
     end
     for _, sprite in ipairs(getSprites()) do
-        -- convert position from game to input
-        local iX = math.floor(INPUTS_X_MAX * (sprite.x / GAME_WEIGHT))
-        local iY = math.floor(INPUTS_Y_MAX * (sprite.y / GAME_HEIGHT))
-        local i = neuronIndexFromGridPosition({ x = iX, y = iY })
+        local i = neuronIndexFromGridPosition({ x = sprite.x, y = sprite.y })
 
         inputs[i + 1] = ENEMY_NEURONNE_VALUE
     end
