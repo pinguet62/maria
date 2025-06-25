@@ -42,10 +42,14 @@ NB_SPRITES = 12 -- limited in this game
 
 -- Constantes de facilitation
 TAILLE_TILE = 16
+--- @deprecated Depending "sprite"|"tile" input group size
 INPUTS_X_MAX = SCREEN_WEIGHT / TAILLE_TILE -- x
+--- @deprecated Depending "sprite"|"tile" input group size
 INPUTS_Y_MAX = SCREEN_HEIGHT / TAILLE_TILE -- y
-NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
-ENEMY_NEURONNE_VALUE = 1
+NB_INPUTS_SPRITES = INPUTS_X_MAX * INPUTS_Y_MAX
+NB_INPUTS_TILES = INPUTS_X_MAX * INPUTS_Y_MAX
+ENEMY_ENABLED = 1
+TILE_ENABLED = 1
 
 --- @alias Position { x: number, y: number } In custom grid (not in pixel graphic). Start at "1"
 --- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
@@ -57,6 +61,7 @@ ENEMY_NEURONNE_VALUE = 1
 ..  ..  ..
 16  32  ..
 --]]
+--- Starts at "0"
 --- @param position Position
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
@@ -71,19 +76,34 @@ end
 
 --- @param reseau Reseau
 function drawReseau(reseau)
-    -- input (#1 sprites)
-    local inputDrawOffset = { x = 0, y = 0 }
     local inputCellSize = 6 -- max SCREEN_WEIGHT/TAILLE_TILE & SCREEN_HEIGHT/TAILLE_TILE
-    for i, inputNeuron in ipairs(reseau.neuronsByLevel[1]) do
+    -- input #1: sprites
+    local spritesInputsDrawOffset = { x = 0, y = 0 }
+    local spritesInputs = { table.unpack(reseau.neuronsByLevel[1], 1, NB_INPUTS_SPRITES) }
+    for i, inputNeuron in ipairs(spritesInputs) do
         local position = gridPositionFromNeuronIndex(i - 1)
         gui.drawRectangle(
-                inputDrawOffset.x + inputCellSize * position.x,
-                inputDrawOffset.y + inputCellSize * position.y,
+                spritesInputsDrawOffset.x + inputCellSize * position.x,
+                spritesInputsDrawOffset.y + inputCellSize * position.y,
                 inputCellSize,
                 inputCellSize,
                 "black",
-                inputNeuron == ENEMY_NEURONNE_VALUE and "red" or nil)
+                inputNeuron == ENEMY_ENABLED and "red" or nil)
     end
+    ---- input #2: tiles
+    local tilesInputsDrawOffset = { x = spritesInputsDrawOffset.x, y = 100--[[TODO computed]] }
+    local tilesInputs = { table.unpack(reseau.neuronsByLevel[1], NB_INPUTS_SPRITES + 1, NB_INPUTS_SPRITES + NB_INPUTS_TILES) }
+    for i, inputNeuron in ipairs(tilesInputs) do
+        local position = gridPositionFromNeuronIndex(i - 1)
+        gui.drawRectangle(
+                tilesInputsDrawOffset.x + inputCellSize * position.x,
+                tilesInputsDrawOffset.y + inputCellSize * position.y,
+                inputCellSize,
+                inputCellSize,
+                "black",
+                inputNeuron == TILE_ENABLED and "red" or nil)
+    end
+
     local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize + inputCellSize
 
     -- intermediates
@@ -194,7 +214,7 @@ end
 function firstRandomGeneration()
     local population = {}
     for i = 1, NB_INDIVIDU_POPULATION do
-        local individu = firstRandomIndividu(NB_INPUTS, #BUTTONS)
+        local individu = firstRandomIndividu(NB_INPUTS_SPRITES + NB_INPUTS_TILES, #BUTTONS)
         mutateIndividu(individu)
         table.insert(population, individu)
     end
@@ -360,8 +380,7 @@ function sigmoid(value)
 end
 
 --- @param reseau Reseau
---- @param inputs TODO
---- @return TODO
+--- @param inputs number[]
 function updateInputsRecomputeLinkToOutputs(reseau, inputs)
     -- 1st level: inputs
     for i, input in ipairs(inputs) do
@@ -388,15 +407,20 @@ function updateInputsRecomputeLinkToOutputs(reseau, inputs)
 end
 
 --- @param individu Reseau
-function computeOutputsThenUpdateButtons(individu)
+function determineInputsThenRecomputeNetworkThenDetermineOutputs(individu)
     local inputs = {}
-    for i = 1, NB_INPUTS do
+    for i = 1, NB_INPUTS_SPRITES + NB_INPUTS_TILES do
         table.insert(inputs, 0)
     end
+    -- #1: sprites
     for _, sprite in ipairs(getSprites()) do
         local i = neuronIndexFromGridPosition({ x = sprite.x, y = sprite.y })
-
-        inputs[i + 1] = ENEMY_NEURONNE_VALUE
+        inputs[i + 1] = ENEMY_ENABLED
+    end
+    -- #2: tiles
+    for _, sprite in ipairs(getTiles()) do
+        local i = NB_INPUTS_SPRITES + neuronIndexFromGridPosition({ x = sprite.x, y = sprite.y })
+        inputs[i + 1 - 1--[[because append to existing]]] = ENEMY_ENABLED
     end
 
     local outputs = updateInputsRecomputeLinkToOutputs(individu, inputs)
@@ -407,7 +431,6 @@ function computeOutputsThenUpdateButtons(individu)
     end
     newButtons.Right = true -- first version: all the way to the right
     joypad.set(newButtons, 1)
-    emu.frameadvance()
 end
 
 --- @return boolean
@@ -424,7 +447,8 @@ end
 function play(individu)
     savestate.load(NOM_SAVESTATE)
     while true do
-        computeOutputsThenUpdateButtons(individu)
+        determineInputsThenRecomputeNetworkThenDetermineOutputs(individu)
+        emu.frameadvance()
         if DRAW then
             drawReseau(individu)
         end
