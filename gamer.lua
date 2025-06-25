@@ -42,8 +42,8 @@ NB_SPRITES = 12 -- limited in this game
 
 -- Constantes de facilitation
 TAILLE_TILE = 16
-INPUTS_X_MAX = 256--[[SCREEN_WEIGHT]] / TAILLE_TILE -- x
-INPUTS_Y_MAX = 256--[[SCREEN_HEIGHT]] / TAILLE_TILE -- y -- TODO plutôt "224", car pas carré
+INPUTS_X_MAX = SCREEN_WEIGHT / TAILLE_TILE -- x
+INPUTS_Y_MAX = SCREEN_HEIGHT / TAILLE_TILE -- y
 NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
 ENEMY_NEURONNE_VALUE = 1
 
@@ -51,6 +51,12 @@ ENEMY_NEURONNE_VALUE = 1
 --- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
 --- @alias Generation Reseau[]
 
+--[[
+ 1  17  ..
+ 2  18  ..
+..  ..  ..
+16  32  ..
+--]]
 --- @param position Position
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
