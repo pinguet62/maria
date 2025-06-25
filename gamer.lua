@@ -30,7 +30,7 @@ TAILLE_COUCHE_CACHEE = 5
 
 -- Algorithmes génétiques
 NB_INDIVIDU_POPULATION = 10
-NB_GENERATIONS = 5000
+NB_GENERATIONS = 5000 -- stop program
 TOP_CLASSEMENT = 0.5 -- keep only part of the ranking
 MUTATION_PROBA = 0.25
 MUTATION_RATE = 0.2 -- ±%
@@ -96,31 +96,42 @@ function drawReseau(reseau)
     for i, inputNeuron in ipairs(tilesInputs) do
         local position = gridPositionFromNeuronIndex(i - 1)
         gui.drawRectangle(
-                tilesInputsDrawOffset.x + inputCellSize * position.x,
-                tilesInputsDrawOffset.y + inputCellSize * position.y,
+                tilesInputsDrawOffset.x + position.x * inputCellSize,
+                tilesInputsDrawOffset.y + position.y * inputCellSize,
                 inputCellSize,
                 inputCellSize,
                 "black",
                 inputNeuron == TILE_ENABLED and "red" or nil)
     end
 
-    local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize + inputCellSize
-
-    -- intermediates
-    -- TODO debug&draw
-    local lastIntermediatesX = lastInputX
-
     -- outputs
     local outputCellSize = 12
-    local outputDrawOffset = { x = 32, y = 0 }
     for o, outputNeuron in ipairs(reseau.neuronsByLevel[#reseau.neuronsByLevel]) do
         gui.drawRectangle(
-                lastIntermediatesX + outputDrawOffset.x,
-                outputDrawOffset.y + outputCellSize * (o - 1),
+                SCREEN_WEIGHT - outputCellSize,
+                (o - 1) * outputCellSize,
                 outputCellSize,
                 outputCellSize,
                 "white",
                 outputActivated(outputNeuron) and "red" or "black")
+    end
+
+    -- intermediates
+    local inputsRight = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize + inputCellSize
+    local outputLeft = SCREEN_WEIGHT - outputCellSize
+    local nbCouches = #reseau.neuronsByLevel - 2
+    local spaceX = math.floor(((outputLeft - inputsRight) - (nbCouches * inputCellSize)) / (nbCouches + 1))
+    local spaceY = 35
+    for c = 2, #reseau.neuronsByLevel - 1 do
+        for n, neuron in ipairs(reseau.neuronsByLevel[c]) do
+            gui.drawRectangle(
+                    inputsRight + spaceX + (c - 2) * (spaceX + inputCellSize),
+                    (n - 1) * (inputCellSize + spaceY),
+                    inputCellSize,
+                    inputCellSize,
+                    "black",
+                    nil)
+        end
     end
 end
 
