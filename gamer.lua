@@ -36,14 +36,14 @@ MUTATION_PROBA = 0.25
 MUTATION_RATE = 0.2 -- ±%
 
 -- Paramètres spécifiques au jeu
-GAME_WEIGHT = 256 -- x (horizontal / to right)
-GAME_HEIGHT = 224 -- y (vertical /to bottom)
-TAILLE_TILE = 16
-NB_SPRITES = 12 -- limit in this game
+SCREEN_WEIGHT = 256 -- x (horizontal / to right)
+SCREEN_HEIGHT = 224 -- y (vertical /to bottom)
+NB_SPRITES = 12 -- limited in this game
 
 -- Constantes de facilitation
-INPUTS_X_MAX = 256--[[GAME_WEIGHT]] / TAILLE_TILE -- x
-INPUTS_Y_MAX = 256--[[GAME_HEIGHT]] / TAILLE_TILE -- y
+TAILLE_TILE = 16
+INPUTS_X_MAX = 256--[[SCREEN_WEIGHT]] / TAILLE_TILE -- x
+INPUTS_Y_MAX = 256--[[SCREEN_HEIGHT]] / TAILLE_TILE -- y -- TODO plutôt "224", car pas carré
 NB_INPUTS = INPUTS_X_MAX * INPUTS_Y_MAX
 ENEMY_NEURONNE_VALUE = 1
 
@@ -114,8 +114,8 @@ function getSprites()
             local screenY = spriteY - cameraY
 
             -- visible by player?
-            if 0 < screenX and screenX < GAME_WEIGHT
-                    and 0 < screenY and screenY < GAME_HEIGHT then
+            if 0 < screenX and screenX < SCREEN_WEIGHT
+                    and 0 < screenY and screenY < SCREEN_HEIGHT then
                 local gridX = math.floor(TAILLE_TILE * (screenX / 256)) + 1
                 local gridY = math.floor(TAILLE_TILE * (screenY / 256)) + 1
                 table.insert(sprites, { x = gridX, y = gridY })
@@ -152,9 +152,9 @@ function getTiles()
     local cameraX = memory.read_s16_le(0x1462)
     local cameraY = memory.read_s16_le(0x1464)
     local sprites = {}
-    for i = 1, GAME_WEIGHT / TAILLE_TILE, 1 do
+    for i = 1, SCREEN_WEIGHT / TAILLE_TILE, 1 do
         local xT = math.floor((cameraX + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
-        for j = 1, GAME_HEIGHT / TAILLE_TILE, 1 do
+        for j = 1, SCREEN_HEIGHT / TAILLE_TILE, 1 do
             local yT = math.floor((cameraY + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
             if xT > 0 and yT > 0 then
                 local tile = memory.readbyte(0x1C800 + math.floor(xT / TAILLE_TILE) * 0x1B0 + yT * TAILLE_TILE + xT % TAILLE_TILE)
