@@ -61,7 +61,7 @@ ENEMY_NEURONNE_VALUE = 1
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
 end
-
+--- @param neuronIndex number
 function gridPositionFromNeuronIndex(neuronIndex)
     return {
         x = neuronIndex % INPUTS_X_MAX,
@@ -71,34 +71,34 @@ end
 
 --- @param reseau Reseau
 function drawReseau(reseau)
-    -- input
+    -- input (#1 sprites)
     local inputDrawOffset = { x = 0, y = 0 }
-    local inputCellSize = { x = 6, y = 6 } -- TODO x & y depending INPUTS_WEIGHT & INPUTS_HEIGHT
+    local inputCellSize = 6 -- max SCREEN_WEIGHT/TAILLE_TILE & SCREEN_HEIGHT/TAILLE_TILE
     for i, inputNeuron in ipairs(reseau.neuronsByLevel[1]) do
         local position = gridPositionFromNeuronIndex(i - 1)
         gui.drawRectangle(
-                inputDrawOffset.x + inputCellSize.x * position.x,
-                inputDrawOffset.y + inputCellSize.y * position.y,
-                inputCellSize.x,
-                inputCellSize.y,
+                inputDrawOffset.x + inputCellSize * position.x,
+                inputDrawOffset.y + inputCellSize * position.y,
+                inputCellSize,
+                inputCellSize,
                 "black",
                 inputNeuron == ENEMY_NEURONNE_VALUE and "red" or nil)
     end
-    local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize.x + inputCellSize.x
+    local lastInputX = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize + inputCellSize
 
     -- intermediates
     -- TODO debug&draw
     local lastIntermediatesX = lastInputX
 
     -- outputs
-    local outputDrawOffset = { x = 24, y = 0 }
-    local outputCellSize = { x = 12, y = 12 }
+    local outputCellSize = 12
+    local outputDrawOffset = { x = 32, y = 0 }
     for o, outputNeuron in ipairs(reseau.neuronsByLevel[#reseau.neuronsByLevel]) do
         gui.drawRectangle(
                 lastIntermediatesX + outputDrawOffset.x,
-                outputDrawOffset.y + outputCellSize.y * (o - 1),
-                outputCellSize.x,
-                outputCellSize.y,
+                outputDrawOffset.y + outputCellSize * (o - 1),
+                outputCellSize,
+                outputCellSize,
                 "white",
                 outputActivated(outputNeuron) and "red" or "black")
     end
@@ -279,10 +279,6 @@ function firstRandomIndividu(nbInputs, nbOutputs)
         table.insert(weightsByLevel, fromNeuron)
     end
 
-    print(json.encode({
-        neuronsByLevel = neuronsByLevel,
-        weightsByLevel = weightsByLevel,
-    }))
     return {
         neuronsByLevel = neuronsByLevel,
         weightsByLevel = weightsByLevel,
