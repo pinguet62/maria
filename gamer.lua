@@ -86,6 +86,10 @@ end
 
 --- @param reseau Reseau
 function drawReseau(reseau)
+    if not DRAW then
+        return
+    end
+
     local inputCellSize = 6 -- max SCREEN_WEIGHT/TAILLE_TILE & SCREEN_HEIGHT/TAILLE_TILE
     -- input #1: sprites
     local spritesInputsDrawOffset = { x = 0, y = 0 }
@@ -124,6 +128,10 @@ function drawReseau(reseau)
                 outputCellSize,
                 "white",
                 outputActivated(outputNeuron) and "red" or "black")
+        gui.drawText(
+                (SCREEN_WEIGHT - outputCellSize) - 20,
+                (o - 1) * outputCellSize,
+                string.format("%.2f", outputNeuron))
     end
 
     -- intermediates
@@ -141,6 +149,10 @@ function drawReseau(reseau)
                     inputCellSize,
                     "black",
                     nil)
+            gui.drawText(
+                    inputsRight + spaceX + (c - 2) * (spaceX + inputCellSize),
+                    (n - 1) * (inputCellSize + spaceY),
+                    string.format("%.2f", neuron))
         end
     end
 end
@@ -512,10 +524,8 @@ function play(individu)
     savestate.load(NOM_SAVESTATE)
     while true do
         determineInputsThenRecomputeNetworkThenDetermineOutputs(individu)
+        drawReseau(individu)
         emu.frameadvance()
-        if DRAW then
-            drawReseau(individu)
-        end
         if niveauFini() then
             return computeScore() -- TODO append time
         end
