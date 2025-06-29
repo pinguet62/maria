@@ -4,3 +4,5 @@
 *.sfc
 # states
 *.State
+# IDE
+.idea
