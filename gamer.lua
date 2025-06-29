@@ -74,83 +74,99 @@ end
 function neuronIndexFromGridPosition(position)
     return position.x + position.y * INPUTS_X_MAX
 end
---- @param neuronIndex number
-function gridPositionFromNeuronIndex(neuronIndex)
-    return {
-        x = neuronIndex % INPUTS_X_MAX,
-        y = math.floor(neuronIndex / INPUTS_X_MAX),
-    }
-end
 
+--- @param reseau Reseau
+--- @param couche number
+--- @param neuron number
+function neuronDrawPosition(reseau, couche, neuron, cellSize)
+    if couche == 1 then
+        local group = neuron <= NB_INPUTS_SPRITES and 0 or 1
+        return {
+            x = cellSize * ((neuron - 1) % INPUTS_X_MAX),
+            y = cellSize * math.floor((neuron - 1) / INPUTS_X_MAX) + (group * 12),
+        }
+    else
+        local deltaInputsX = INPUTS_X_MAX * cellSize
+        local sizeCellCouches = (#reseau.neuronsByLevel - 1) * cellSize
+        local spaceBetweenCouchesX = math.floor((SCREEN_WEIGHT - deltaInputsX - sizeCellCouches) / (#reseau.neuronsByLevel - 1))
+        local spaceBetweenCouchesY = math.floor((SCREEN_HEIGHT - (TAILLE_COUCHE_CACHEE * cellSize)) / TAILLE_COUCHE_CACHEE)
+        return {
+            x = deltaInputsX + spaceBetweenCouchesX + (couche - 2) * (spaceBetweenCouchesX + cellSize),
+            y = (neuron - 1) * (cellSize + spaceBetweenCouchesY),
+        }
+    end
+end
+--- Recursive fonction to remonter: de l'output activé, jusqu'au(x) (différents?) input(s) activé(s)
+--- @param tgtCouche number Couche where the neuron is activated (target)
+--- @param tgtNeuron number Neuron activated (target)
+function drawLinkToActivatedNeuron(reseau, tgtCouche, tgtNeuron, weightDetection, cellSize)
+    local srcCouche = tgtCouche - 1
+    if srcCouche == 0 then
+        return
+    end
+
+    -- create single link with best input
+    local bestPreviousNeuronIndex = nil
+    local bestPreviousNeuronWeight = nil
+    for p, previousNeuron in ipairs(reseau.neuronsByLevel[srcCouche]) do
+        if previousNeuron then
+            local weight = reseau.weightsByLevel[srcCouche][p][tgtNeuron]
+            if bestPreviousNeuronWeight == nil or weight > bestPreviousNeuronWeight then
+                bestPreviousNeuronWeight = weight
+                bestPreviousNeuronIndex = p
+            end
+        end
+    end
+
+    local fromScreenPosition = neuronDrawPosition(reseau, srcCouche, bestPreviousNeuronIndex, cellSize)
+    local toScreenPosition = neuronDrawPosition(reseau, tgtCouche, tgtNeuron, cellSize)
+    gui.drawLine(
+            fromScreenPosition.x + cellSize / 2,
+            fromScreenPosition.y + cellSize / 2,
+            toScreenPosition.x + cellSize / 2,
+            toScreenPosition.y + cellSize / 2,
+            "white")
+    drawLinkToActivatedNeuron(reseau, srcCouche, bestPreviousNeuronIndex, weightDetection, cellSize)
+end
 --- @param reseau Reseau
 function drawReseau(reseau)
     if not DRAW then
         return
     end
 
-    local inputCellSize = 6 -- max SCREEN_WEIGHT/TAILLE_TILE & SCREEN_HEIGHT/TAILLE_TILE
-    -- input #1: sprites
-    local spritesInputsDrawOffset = { x = 0, y = 0 }
-    local spritesInputs = { table.unpack(reseau.neuronsByLevel[1], 1, NB_INPUTS_SPRITES) }
-    for i, inputNeuron in ipairs(spritesInputs) do
-        local position = gridPositionFromNeuronIndex(i - 1)
-        gui.drawRectangle(
-                spritesInputsDrawOffset.x + inputCellSize * position.x,
-                spritesInputsDrawOffset.y + inputCellSize * position.y,
-                inputCellSize,
-                inputCellSize,
-                "black",
-                inputNeuron and "red" or nil)
-    end
-    ---- input #2: tiles
-    local tilesInputsDrawOffset = { x = spritesInputsDrawOffset.x, y = 100--[[TODO computed]] }
-    local tilesInputs = { table.unpack(reseau.neuronsByLevel[1], NB_INPUTS_SPRITES + 1, NB_INPUTS_SPRITES + NB_INPUTS_TILES) }
-    for i, inputNeuron in ipairs(tilesInputs) do
-        local position = gridPositionFromNeuronIndex(i - 1)
-        gui.drawRectangle(
-                tilesInputsDrawOffset.x + position.x * inputCellSize,
-                tilesInputsDrawOffset.y + position.y * inputCellSize,
-                inputCellSize,
-                inputCellSize,
-                "black",
-                inputNeuron and "red" or nil)
-    end
+    local cellSize = 6
 
-    -- outputs
-    local outputCellSize = 12
-    for o, outputNeuron in ipairs(reseau.neuronsByLevel[#reseau.neuronsByLevel]) do
-        gui.drawRectangle(
-                SCREEN_WEIGHT - outputCellSize,
-                (o - 1) * outputCellSize,
-                outputCellSize,
-                outputCellSize,
-                "white",
-                outputNeuron and "red" or "black")
-    end
-
-    -- intermediates
-    local inputsRight = gridPositionFromNeuronIndex(#reseau.neuronsByLevel[1] - 1).x * inputCellSize + inputCellSize
-    local outputLeft = SCREEN_WEIGHT - outputCellSize
-    local nbCouches = #reseau.neuronsByLevel - 2
-    local spaceX = math.floor(((outputLeft - inputsRight) - (nbCouches * inputCellSize)) / (nbCouches + 1))
-    local spaceY = 35
-    for c = 2, #reseau.neuronsByLevel - 1 do
+    for c = 1, #reseau.neuronsByLevel do
         for n, neuron in ipairs(reseau.neuronsByLevel[c]) do
+            local screenPosition = neuronDrawPosition(reseau, c, n, cellSize)
             gui.drawRectangle(
-                    inputsRight + spaceX + (c - 2) * (spaceX + inputCellSize),
-                    (n - 1) * (inputCellSize + spaceY),
-                    inputCellSize,
-                    inputCellSize,
+                    screenPosition.x,
+                    screenPosition.y,
+                    cellSize,
+                    cellSize,
                     "black",
-                    neuron and "red" or "black")
+                    neuron and "red" or nil)
+        end
+    end
+
+    local linksFromCouche = #reseau.neuronsByLevel
+    for n, neuron in ipairs(reseau.neuronsByLevel[linksFromCouche]) do
+        if neuron then
+            drawLinkToActivatedNeuron(reseau, linksFromCouche, n, 0.3, cellSize)
         end
     end
 end
 
+function getPositionCamera()
+    return {
+        x = memory.read_s16_le(0x1462),
+        y = memory.read_s16_le(0x1464),
+    }
+end
+
 --- @return Position[]
 function getSprites()
-    local cameraX = memory.read_s16_le(0x1462)
-    local cameraY = memory.read_s16_le(0x1464)
+    local camera = getPositionCamera()
 
     local sprites = {}
     for i = 0, NB_SPRITES - 1 do
@@ -159,8 +175,8 @@ function getSprites()
             local spriteX = memory.readbyte(0xe4 + i) + memory.readbyte(0x14e0 + i) * 256
             local spriteY = memory.readbyte(0xd8 + i) + memory.readbyte(0x14d4 + i) * 256
 
-            local screenX = spriteX - cameraX
-            local screenY = spriteY - cameraY
+            local screenX = spriteX - camera.x
+            local screenY = spriteY - camera.y
 
             -- visible by player?
             if 0 < screenX and screenX < SCREEN_WEIGHT
@@ -182,12 +198,11 @@ function runDebugSprites()
         if rep % interval == 0 then
             console.clear()
             gui.clearGraphics()
-            for i = 0, 15 do
-                for j = 0, 15 do
-                    gui.drawRectangle(i * 16, j * 16, 16, 16, "black")
+            for x = 1, SCREEN_WEIGHT / TAILLE_TILE do
+                for y = 1, SCREEN_HEIGHT / TAILLE_TILE do
+                    gui.drawRectangle((x - 1) * TAILLE_TILE, (y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", nil)
                 end
             end
-
             for _, sprite in ipairs(getSprites()) do
                 gui.drawRectangle((sprite.x - 1) * TAILLE_TILE, (sprite.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
             end
@@ -198,13 +213,12 @@ end
 
 --- @return Position[]
 function getTiles()
-    local cameraX = memory.read_s16_le(0x1462)
-    local cameraY = memory.read_s16_le(0x1464)
+    local camera = getPositionCamera()
     local sprites = {}
     for i = 1, SCREEN_WEIGHT / TAILLE_TILE, 1 do
-        local xT = math.floor((cameraX + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
+        local xT = math.floor((camera.x + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
         for j = 1, SCREEN_HEIGHT / TAILLE_TILE, 1 do
-            local yT = math.floor((cameraY + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
+            local yT = math.floor((camera.y + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
             if xT > 0 and yT > 0 then
                 local tile = memory.readbyte(0x1C800 + math.floor(xT / TAILLE_TILE) * 0x1B0 + yT * TAILLE_TILE + xT % TAILLE_TILE)
                 if tile == 1 then
@@ -224,10 +238,20 @@ function runDebugTiles()
         if rep % interval == 0 then
             console.clear()
             gui.clearGraphics()
+            for x = 1, SCREEN_WEIGHT / TAILLE_TILE do
+                for y = 1, SCREEN_HEIGHT / TAILLE_TILE do
+                    gui.drawRectangle((x - 1) * TAILLE_TILE, (y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", nil)
+                end
+            end
             for _, tile in ipairs(getTiles()) do
                 console.log(tile.x .. "/" .. tile.y)
                 gui.drawRectangle((tile.x - 1) * TAILLE_TILE, (tile.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
             end
+            gui.drawRectangle(
+                    ((SCREEN_WEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
+                    ((SCREEN_HEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
+                    TAILLE_TILE, 1.5 * TAILLE_TILE,
+                    "blue", "blue")
         end
         emu.frameadvance()
     end
@@ -417,9 +441,9 @@ function updateInputsRecomputeLinkToOutputs(reseau, inputs)
     for c = 2, #reseau.neuronsByLevel do
         for n, neuron in ipairs(reseau.neuronsByLevel[c]) do
             local weightedSum = 0.0
-            for p, previous in ipairs(reseau.neuronsByLevel[c - 1]) do
+            for p, previousNeuron in ipairs(reseau.neuronsByLevel[c - 1]) do
                 local weight = reseau.weightsByLevel[c - 1][p][n]
-                weightedSum = weightedSum + weight * (previous and 1 or 0)
+                weightedSum = weightedSum + weight * (previousNeuron and 1 or 0)
             end
             reseau.neuronsByLevel[c][n] = activated(weightedSum)
         end
