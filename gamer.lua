@@ -24,7 +24,6 @@ PROGRAM = "IA"
 -- Debug & Test
 RESTORED_STATE = nil
 --RESTORED_STATE = json.decode(io.open("./state.json", "rb"):read())
-DRAW = false
 
 -- Réseau de neurones
 NB_COUCHE_CACHEES = 1
@@ -50,6 +49,15 @@ INPUTS_X_MAX = SCREEN_WEIGHT / TAILLE_TILE -- x
 INPUTS_Y_MAX = SCREEN_HEIGHT / TAILLE_TILE -- y
 NB_INPUTS_SPRITES = INPUTS_X_MAX * INPUTS_Y_MAX
 NB_INPUTS_TILES = INPUTS_X_MAX * INPUTS_Y_MAX
+
+-- Debug & interaction
+local form = forms.newform(200, 75, "Maria")
+event.onexit(function()
+    forms.destroy(form)
+end)
+local draw = forms.checkbox(form, "Draw network", 10, 0)
+local printBest = forms.checkbox(form, "Print best", 10, 20)
+forms.setproperty(printBest, "Checked", true)
 
 --- @alias Position { x: number, y: number } In custom grid (not in pixel graphic). Start at "1"
 --- @alias Reseau { neuronsByLevel: number[][], weightsByLevel: number[][][] }
@@ -130,7 +138,8 @@ function drawLinkToActivatedNeuron(reseau, tgtCouche, tgtNeuron, weightDetection
 end
 --- @param reseau Reseau
 function drawReseau(reseau)
-    if not DRAW then
+    if not forms.ischecked(draw) then
+        gui.clearGraphics()
         return
     end
 
@@ -219,7 +228,7 @@ function runDebugSprites()
                     TAILLE_TILE, 1.5 * TAILLE_TILE,
                     "blue", "blue")
             for _, sprite in ipairs(getSprites()) do
-                console.log(sprite.x .. "/" .. sprite.y)
+                print(sprite.x .. "/" .. sprite.y)
                 if sprite.x < 1 or sprite.x > SCREEN_WEIGHT / TAILLE_TILE or sprite.y < 1 or sprite.y > SCREEN_HEIGHT / TAILLE_TILE then
                     error("Invalid sprite: " .. sprite)
                 end
@@ -239,9 +248,9 @@ function getTiles()
     }
 
     local sprites = {}
-    for i = 1, SCREEN_WEIGHT / TAILLE_TILE, 1 do
+    for i = 1, SCREEN_WEIGHT / TAILLE_TILE do
         local xT = math.floor((relativePosition.x + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
-        for j = 1, SCREEN_HEIGHT / TAILLE_TILE, 1 do
+        for j = 1, SCREEN_HEIGHT / TAILLE_TILE do
             local yT = math.floor((relativePosition.y + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
             if xT > 0 and yT > 0 then
                 local tile = memory.readbyte(0x1C800 + math.floor(xT / TAILLE_TILE) * 0x1B0 + yT * TAILLE_TILE + xT % TAILLE_TILE)
@@ -273,7 +282,7 @@ function runDebugTiles()
                     TAILLE_TILE, 1.5 * TAILLE_TILE,
                     "blue", "blue")
             for _, tile in ipairs(getTiles()) do
-                console.log(tile.x .. "/" .. tile.y)
+                print(tile.x .. "/" .. tile.y)
                 if tile.x < 1 or tile.x > SCREEN_WEIGHT / TAILLE_TILE or tile.y < 1 or tile.y > SCREEN_HEIGHT / TAILLE_TILE then
                     error("Invalid tile: " .. tile)
                 end
@@ -305,8 +314,11 @@ function nextGeneration(previousGeneration, scoreByIndividu)
         return a.score > b.score
     end)
     local bestIndividu = scoreByIndividu[1].individu
+    if forms.ischecked(printBest) then
+        print(json.encode(scoreByIndividu[1].individu))
+    end
     if #previousGeneration > 1 and scoreByIndividu[1].score ~= scoreByIndividu[2].score then
-        console.log("Generation with a #1 !!!")
+        print("Generation with a #1 !!!")
     end
 
     local nextGeneration = {}
@@ -495,9 +507,9 @@ function determineInputsThenRecomputeNetworkThenDetermineOutputs(individu)
         inputs[i + 1] = true
     end
     -- #2: tiles
-    for _, sprite in ipairs(getTiles()) do
-        local i = NB_INPUTS_SPRITES + neuronIndexFromGridPosition({ x = sprite.x, y = sprite.y })
-        inputs[i + 1 - 1--[[because append to existing]]] = true
+    for _, title in ipairs(getTiles()) do
+        local i = neuronIndexFromGridPosition({ x = title.x, y = title.y })
+        inputs[NB_INPUTS_SPRITES + i + 1 - 1--[[because append to existing]]] = true
     end
 
     local outputs = updateInputsRecomputeLinkToOutputs(individu, inputs)
@@ -541,9 +553,9 @@ function runDebugScore()
     while true do
         rep = rep + 1
         if rep % interval == 0 then
-            console.log(getMarioScore())
-            console.log(getTimer())
-            console.log("=> " .. computeScore())
+            print(getMarioScore())
+            print(getTimer())
+            print("=> " .. computeScore())
         end
         emu.frameadvance()
     end
@@ -565,12 +577,19 @@ end
 function runIA()
     local population = firstRandomGeneration()
     for generation = 1, NB_GENERATIONS do
-        console.log("Génération " .. generation .. "/" .. NB_GENERATIONS)
+        print("Génération " .. generation .. "/" .. NB_GENERATIONS)
         local scoreByIndividu = {}
         for i, individu in ipairs(population) do
-            local score = play(individu)
-            console.log("> Individu " .. i .. "/" .. #population .. " with score " .. score)
-            table.insert(scoreByIndividu, { individu = individu, score = score })
+            local score = nil
+            if pcall(function()
+                score = play(individu)
+            end) then
+                print("> Individu " .. i .. "/" .. #population .. " with score " .. score)
+                table.insert(scoreByIndividu, { individu = individu, score = score })
+            else
+                print("Error with individu:\n" .. json.encode(individu))
+                return
+            end
         end
 
         population = nextGeneration(population, scoreByIndividu)
