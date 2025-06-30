@@ -56,6 +56,7 @@ event.onexit(function()
     forms.destroy(form)
 end)
 local draw = forms.checkbox(form, "Draw network", 10, 0)
+forms.setproperty(draw, "Checked", true)
 local printBest = forms.checkbox(form, "Print best", 10, 20)
 forms.setproperty(printBest, "Checked", true)
 
@@ -77,10 +78,19 @@ end
 ..  ..  ..
 16  32  ..
 --]]
---- Starts at "0"
 --- @param position Position
+--- @return number Index starting at "1"
 function neuronIndexFromGridPosition(position)
-    return position.x + position.y * INPUTS_X_MAX
+    return (position.x - 1) * INPUTS_Y_MAX + position.y
+end
+--- @param index number Index starting at "1"
+--- @return Position
+function gridPositionFromNeuronIndex(index)
+    index = (index - 1) % (INPUTS_X_MAX * INPUTS_Y_MAX) + 1
+    return {
+        x = math.floor((index - 1) / INPUTS_Y_MAX) + 1,
+        y = (index - 1) % INPUTS_Y_MAX + 1,
+    }
 end
 
 --- @param reseau Reseau
@@ -88,10 +98,11 @@ end
 --- @param neuron number
 function neuronDrawPosition(reseau, couche, neuron, cellSize)
     if couche == 1 then
-        local group = neuron <= NB_INPUTS_SPRITES and 0 or 1
+        local group = neuron <= (INPUTS_X_MAX * INPUTS_Y_MAX) and 0 or 1
+        local position = gridPositionFromNeuronIndex(neuron)
         return {
-            x = cellSize * ((neuron - 1) % INPUTS_X_MAX),
-            y = cellSize * math.floor((neuron - 1) / INPUTS_X_MAX) + (group * 12),
+            x = cellSize * (position.x - 1),
+            y = cellSize * (position.y - 1) + group * (cellSize * INPUTS_Y_MAX + 12),
         }
     else
         local deltaInputsX = INPUTS_X_MAX * cellSize
@@ -504,7 +515,7 @@ function determineInputsThenRecomputeNetworkThenDetermineOutputs(individu)
     -- #1: sprites
     for _, sprite in ipairs(getSprites()) do
         local i = neuronIndexFromGridPosition({ x = sprite.x, y = sprite.y })
-        inputs[i + 1] = true
+        inputs[i] = true
     end
     -- #2: tiles
     for _, title in ipairs(getTiles()) do
