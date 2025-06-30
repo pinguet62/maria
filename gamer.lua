@@ -163,10 +163,20 @@ function getPositionCamera()
         y = memory.read_s16_le(0x1464),
     }
 end
+function getPositionMario()
+    return {
+        x = memory.read_s16_le(0x94),
+        y = memory.read_s16_le(0x96),
+    }
+end
 
 --- @return Position[]
 function getSprites()
-    local camera = getPositionCamera()
+    local mario = getPositionMario()
+    local relativePosition = {
+        x = mario.x - TAILLE_TILE * 7,
+        y = mario.y - TAILLE_TILE * 5,
+    }
 
     local sprites = {}
     for i = 0, NB_SPRITES - 1 do
@@ -175,8 +185,8 @@ function getSprites()
             local spriteX = memory.readbyte(0xe4 + i) + memory.readbyte(0x14e0 + i) * 256
             local spriteY = memory.readbyte(0xd8 + i) + memory.readbyte(0x14d4 + i) * 256
 
-            local screenX = spriteX - camera.x
-            local screenY = spriteY - camera.y
+            local screenX = spriteX - relativePosition.x
+            local screenY = spriteY - relativePosition.y
 
             -- visible by player?
             if 0 < screenX and screenX < SCREEN_WEIGHT
@@ -203,7 +213,16 @@ function runDebugSprites()
                     gui.drawRectangle((x - 1) * TAILLE_TILE, (y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", nil)
                 end
             end
+            gui.drawRectangle(
+                    ((SCREEN_WEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
+                    ((SCREEN_HEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
+                    TAILLE_TILE, 1.5 * TAILLE_TILE,
+                    "blue", "blue")
             for _, sprite in ipairs(getSprites()) do
+                console.log(sprite.x .. "/" .. sprite.y)
+                if sprite.x < 1 or sprite.x > SCREEN_WEIGHT / TAILLE_TILE or sprite.y < 1 or sprite.y > SCREEN_HEIGHT / TAILLE_TILE then
+                    error("Invalid sprite: " .. sprite)
+                end
                 gui.drawRectangle((sprite.x - 1) * TAILLE_TILE, (sprite.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
             end
         end
@@ -213,12 +232,17 @@ end
 
 --- @return Position[]
 function getTiles()
-    local camera = getPositionCamera()
+    local mario = getPositionMario()
+    local relativePosition = {
+        x = mario.x - TAILLE_TILE * 7,
+        y = mario.y - TAILLE_TILE * 5,
+    }
+
     local sprites = {}
     for i = 1, SCREEN_WEIGHT / TAILLE_TILE, 1 do
-        local xT = math.floor((camera.x + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
+        local xT = math.floor((relativePosition.x + ((i - 1) * TAILLE_TILE) + 8) / TAILLE_TILE)
         for j = 1, SCREEN_HEIGHT / TAILLE_TILE, 1 do
-            local yT = math.floor((camera.y + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
+            local yT = math.floor((relativePosition.y + ((j - 1) * TAILLE_TILE)) / TAILLE_TILE)
             if xT > 0 and yT > 0 then
                 local tile = memory.readbyte(0x1C800 + math.floor(xT / TAILLE_TILE) * 0x1B0 + yT * TAILLE_TILE + xT % TAILLE_TILE)
                 if tile == 1 then
@@ -243,15 +267,18 @@ function runDebugTiles()
                     gui.drawRectangle((x - 1) * TAILLE_TILE, (y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", nil)
                 end
             end
-            for _, tile in ipairs(getTiles()) do
-                console.log(tile.x .. "/" .. tile.y)
-                gui.drawRectangle((tile.x - 1) * TAILLE_TILE, (tile.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
-            end
             gui.drawRectangle(
                     ((SCREEN_WEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
                     ((SCREEN_HEIGHT / TAILLE_TILE) / 2 - 1) * TAILLE_TILE - (TAILLE_TILE / 2),
                     TAILLE_TILE, 1.5 * TAILLE_TILE,
                     "blue", "blue")
+            for _, tile in ipairs(getTiles()) do
+                console.log(tile.x .. "/" .. tile.y)
+                if tile.x < 1 or tile.x > SCREEN_WEIGHT / TAILLE_TILE or tile.y < 1 or tile.y > SCREEN_HEIGHT / TAILLE_TILE then
+                    error("Invalid tile: " .. tile)
+                end
+                gui.drawRectangle((tile.x - 1) * TAILLE_TILE, (tile.y - 1) * TAILLE_TILE, TAILLE_TILE, TAILLE_TILE, "black", "red")
+            end
         end
         emu.frameadvance()
     end
